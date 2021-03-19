@@ -16,7 +16,7 @@ import (
 var Version = "develop"
 
 func main() {
-	configPath := flag.String("c", "./cmd/linkgate/config-local.yaml", "path to linkgate config")
+	configPath := flag.String("c", "./cmd/mapreducer/config-local.yaml", "path to mapreducer")
 	flag.Parse()
 
 	filenameHook := filename.NewHook()
@@ -27,13 +27,18 @@ func main() {
 	log.Formatter = &logrus.JSONFormatter{}
 	cfg := &configs.MapReduce{}
 
+	log.WithField("version", Version).Info("started")
+
 	err := configs.Read(*configPath, cfg)
 	if err != nil {
 		log.WithError(err).Fatal("can't read config")
 	}
 
-	elementsCount := 0
-	data := []string{"a", "b", "c", "a", "e"}
+	elementsCount := 2
+	allData := [][]string{
+		{"a", "b", "c", "a", "e"},
+		{"a", "b", "c", "a", "e"},
+	}
 
 	wg := &sync.WaitGroup{}
 	wg.Add(elementsCount)
@@ -41,11 +46,13 @@ func main() {
 	list := make(chan []model.Value)
 	result := make(chan []model.Value)
 
-	go func(data []string, output chan []model.Value, wg *sync.WaitGroup) {
-		defer wg.Done()
+	for i := range allData {
+		go func(data []string, output chan []model.Value, wg *sync.WaitGroup) {
+			defer wg.Done()
 
-		output <- Map(data)
-	}(data, list, wg)
+			output <- Map(data)
+		}(allData[i], list, wg)
+	}
 
 	go Reducer(list, result)
 
@@ -75,12 +82,21 @@ func Map(words []string) []model.Value {
 }
 
 func Reducer(input, output chan []model.Value) {
+	unique := make(map[string]*model.Value)
 	result := make([]model.Value, 0)
 
 	for in := range input {
 		for i := range in {
-			result = append(result, in[i])
+			if _, ok := unique[in[i].Word]; ok {
+				unique[in[i].Word].Count += in[i].Count
+			} else {
+				unique[in[i].Word] = &model.Value{Word: in[i].Word, Count: in[i].Count}
+			}
 		}
+	}
+
+	for i := range unique {
+		result = append(result, *unique[i])
 	}
 
 	output <- result
