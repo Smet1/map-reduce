@@ -1,8 +1,9 @@
 package main
 
 import (
+	"encoding/csv"
 	"flag"
-	"fmt"
+	"os"
 	"sync"
 
 	"github.com/Smet1/map-reduce/internal/configs"
@@ -34,38 +35,57 @@ func main() {
 		log.WithError(err).Fatal("can't read config")
 	}
 
-	elementsCount := 2
-	allData := [][]string{
-		{"a", "b", "c", "a", "e"},
-		{"a", "b", "c", "a", "e"},
-	}
-
 	wg := &sync.WaitGroup{}
-	wg.Add(elementsCount)
-
-	list := make(chan []model.Value)
-	result := make(chan []model.Value)
-
-	for i := range allData {
-		go func(data []string, output chan []model.Value, wg *sync.WaitGroup) {
-			defer wg.Done()
-
-			output <- Map(data)
-		}(allData[i], list, wg)
-	}
+	list := make(chan []*model.Value)
+	result := make(chan []*model.Value)
 
 	go Reducer(list, result)
+
+	for _, filePath := range cfg.FilesPath {
+		go func(path string) {
+			input := make(chan string)
+
+			f, err := os.Open(path)
+			if err != nil {
+				log.WithError(err).Error("can't open file")
+
+				return
+			}
+
+			wg.Add(1)
+			defer f.Close()
+
+			go func(data chan string, output chan []*model.Value, wg *sync.WaitGroup) {
+				defer wg.Done()
+
+				output <- Map(data)
+			}(input, list, wg)
+
+			lines, err := csv.NewReader(f).ReadAll()
+			if err != nil {
+				wg.Done()
+				close(input)
+
+				return
+			}
+			for i := range lines {
+				input <- lines[i][0]
+			}
+
+			close(input)
+		}(filePath)
+	}
 
 	wg.Wait()
 	close(list)
 
-	fmt.Println(<-result)
+	log.WithField("result", <-result).Info("ended")
 }
 
-func Map(words []string) []model.Value {
+func Map(words chan string) []*model.Value {
 	unique := make(map[string]*model.Value)
 
-	for _, word := range words {
+	for word := range words {
 		if _, ok := unique[word]; ok {
 			unique[word].Count += 1
 		} else {
@@ -73,17 +93,17 @@ func Map(words []string) []model.Value {
 		}
 	}
 
-	res := make([]model.Value, 0)
+	res := make([]*model.Value, 0)
 	for i := range unique {
-		res = append(res, *unique[i])
+		res = append(res, unique[i])
 	}
 
 	return res
 }
 
-func Reducer(input, output chan []model.Value) {
+func Reducer(input, output chan []*model.Value) {
 	unique := make(map[string]*model.Value)
-	result := make([]model.Value, 0)
+	result := make([]*model.Value, 0)
 
 	for in := range input {
 		for i := range in {
@@ -96,7 +116,7 @@ func Reducer(input, output chan []model.Value) {
 	}
 
 	for i := range unique {
-		result = append(result, *unique[i])
+		result = append(result, unique[i])
 	}
 
 	output <- result
