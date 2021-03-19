@@ -1,2 +1,4 @@
 files_path:
-  - /Users/kismetan/Desktop/Учеба/мага/4 сем/какое-то говно/map-reduce/kek.csv
+ - path/to/file1.csv
+ - path/to/file2.csv
+output: path/to/output.txt

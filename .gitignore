@@ -1,6 +1,12 @@
 .vscode
+*-local.yaml
 kek.csv
 kek1.csv
+kek2.csv
+kek3.csv
+kek_cp.csv
+lab.csv
+result.txt
 # Created by https://www.toptal.com/developers/gitignore/api/go,macos
 # Edit at https://www.toptal.com/developers/gitignore?templates=go,macos
 

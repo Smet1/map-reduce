@@ -9,6 +9,7 @@ import (
 
 type MapReduce struct {
 	FilesPath []string `yaml:"files_path"`
+	Output    string   `yaml:"output"`
 }
 
 func Read(path string, cfg interface{}) error {

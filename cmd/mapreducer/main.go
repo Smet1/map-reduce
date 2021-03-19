@@ -3,13 +3,16 @@ package main
 import (
 	"encoding/csv"
 	"flag"
+	"fmt"
 	"os"
+	"runtime"
 	"sync"
+
+	"github.com/onrik/logrus/filename"
+	"github.com/sirupsen/logrus"
 
 	"github.com/Smet1/map-reduce/internal/configs"
 	"github.com/Smet1/map-reduce/internal/model"
-	"github.com/onrik/logrus/filename"
-	"github.com/sirupsen/logrus"
 )
 
 // Version is a build tag from ldflag
@@ -17,6 +20,8 @@ import (
 var Version = "develop"
 
 func main() {
+	// Print our starting memory usage (should be around 0mb)
+	PrintMemUsage("START")
 	configPath := flag.String("c", "./cmd/mapreducer/config-local.yaml", "path to mapreducer")
 	flag.Parse()
 
@@ -62,17 +67,15 @@ func main() {
 				output <- Map(data, end)
 			}(input, end, list, wg)
 
-			lines, err := csv.NewReader(f).ReadAll()
-			if err != nil {
-				wg.Done()
-				close(input)
+			for {
+				line, err := csv.NewReader(f).Read()
+				if err != nil {
+					break
+				}
 
-				return
+				input <- line[0]
 			}
 
-			for i := range lines {
-				input <- lines[i][0]
-			}
 			end <- struct{}{}
 			close(input)
 		}(filePath)
@@ -81,7 +84,23 @@ func main() {
 	wg.Wait()
 	close(list)
 
-	log.WithField("result", <-result).Info("ended")
+	PrintMemUsage("END MAIN")
+
+	f, err := os.Create(cfg.Output)
+	if err != nil {
+		log.WithError(err).Error("can't create or truncate file")
+	}
+
+	res := <-result
+	close(result)
+
+	for i := range res {
+		f.WriteString(fmt.Sprintf("%s: %v\n", res[i].Word, res[i].Count))
+	}
+
+	f.Close()
+
+	log.Info("ended")
 }
 
 func Map(words chan string, end chan struct{}) []*model.Value {
@@ -129,4 +148,25 @@ func Reducer(input, output chan []*model.Value) {
 	}
 
 	output <- result
+}
+
+// PrintMemUsage outputs the current, total and OS memory being used. As well as the number
+// of garage collection cycles completed.
+func PrintMemUsage(prefix string) {
+	log := logrus.New()
+	log.Formatter = &logrus.JSONFormatter{}
+
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	log.WithFields(logrus.Fields{
+		"tag":        prefix,
+		"Alloc(MiB)": bToMb(m.Alloc),
+		"Sys(MiB)":   bToMb(m.Sys),
+		"NumGC":      m.NumGC,
+	}).Info("usage")
+}
+
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
 }
