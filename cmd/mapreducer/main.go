@@ -42,8 +42,11 @@ func main() {
 	go Reducer(list, result)
 
 	for _, filePath := range cfg.FilesPath {
+		wg.Add(1)
+
 		go func(path string) {
 			input := make(chan string)
+			end := make(chan struct{})
 
 			f, err := os.Open(path)
 			if err != nil {
@@ -52,14 +55,12 @@ func main() {
 				return
 			}
 
-			wg.Add(1)
 			defer f.Close()
-
-			go func(data chan string, output chan []*model.Value, wg *sync.WaitGroup) {
+			go func(data chan string, end chan struct{}, output chan []*model.Value, wg *sync.WaitGroup) {
 				defer wg.Done()
 
-				output <- Map(data)
-			}(input, list, wg)
+				output <- Map(data, end)
+			}(input, end, list, wg)
 
 			lines, err := csv.NewReader(f).ReadAll()
 			if err != nil {
@@ -68,10 +69,11 @@ func main() {
 
 				return
 			}
+
 			for i := range lines {
 				input <- lines[i][0]
 			}
-
+			end <- struct{}{}
 			close(input)
 		}(filePath)
 	}
@@ -82,23 +84,30 @@ func main() {
 	log.WithField("result", <-result).Info("ended")
 }
 
-func Map(words chan string) []*model.Value {
+func Map(words chan string, end chan struct{}) []*model.Value {
 	unique := make(map[string]*model.Value)
 
-	for word := range words {
-		if _, ok := unique[word]; ok {
-			unique[word].Count += 1
-		} else {
-			unique[word] = &model.Value{Word: word, Count: 1}
+	for {
+		select {
+		case word := <-words:
+			{
+				if _, ok := unique[word]; ok {
+					unique[word].Count += 1
+				} else {
+					unique[word] = &model.Value{Word: word, Count: 1}
+				}
+			}
+		case <-end:
+			{
+				res := make([]*model.Value, 0)
+				for i := range unique {
+					res = append(res, unique[i])
+				}
+
+				return res
+			}
 		}
 	}
-
-	res := make([]*model.Value, 0)
-	for i := range unique {
-		res = append(res, unique[i])
-	}
-
-	return res
 }
 
 func Reducer(input, output chan []*model.Value) {
