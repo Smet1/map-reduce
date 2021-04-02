@@ -22,6 +22,7 @@ var Version = "develop"
 func main() {
 	// Print our starting memory usage (should be around 0mb)
 	PrintMemUsage("START")
+
 	configPath := flag.String("c", "./cmd/mapreducer/config-local.yaml", "path to mapreducer")
 	flag.Parse()
 
@@ -53,14 +54,15 @@ func main() {
 			input := make(chan string)
 			end := make(chan struct{})
 
-			f, err := os.Open(path)
-			if err != nil {
-				log.WithError(err).Error("can't open file")
+			f, errF := os.Open(path)
+			if errF != nil {
+				log.WithError(errF).Error("can't open file")
 
 				return
 			}
 
 			defer f.Close()
+
 			go func(data chan string, end chan struct{}, output chan []*model.Value, wg *sync.WaitGroup) {
 				defer wg.Done()
 
@@ -68,8 +70,8 @@ func main() {
 			}(input, end, list, wg)
 
 			for {
-				line, err := csv.NewReader(f).Read()
-				if err != nil {
+				line, errR := csv.NewReader(f).Read()
+				if errR != nil {
 					break
 				}
 
@@ -77,6 +79,7 @@ func main() {
 			}
 
 			end <- struct{}{}
+
 			close(input)
 		}(filePath)
 	}
@@ -95,7 +98,7 @@ func main() {
 	close(result)
 
 	for i := range res {
-		f.WriteString(fmt.Sprintf("%s: %v\n", res[i].Word, res[i].Count))
+		_, _ = f.WriteString(fmt.Sprintf("%s: %v\n", res[i].Word, res[i].Count))
 	}
 
 	f.Close()
@@ -109,22 +112,18 @@ func Map(words chan string, end chan struct{}) []*model.Value {
 	for {
 		select {
 		case word := <-words:
-			{
-				if _, ok := unique[word]; ok {
-					unique[word].Count += 1
-				} else {
-					unique[word] = &model.Value{Word: word, Count: 1}
-				}
+			if _, ok := unique[word]; ok {
+				unique[word].Count++
+			} else {
+				unique[word] = &model.Value{Word: word, Count: 1}
 			}
 		case <-end:
-			{
-				res := make([]*model.Value, 0)
-				for i := range unique {
-					res = append(res, unique[i])
-				}
-
-				return res
+			res := make([]*model.Value, 0)
+			for i := range unique {
+				res = append(res, unique[i])
 			}
+
+			return res
 		}
 	}
 }
@@ -157,6 +156,7 @@ func PrintMemUsage(prefix string) {
 	log.Formatter = &logrus.JSONFormatter{}
 
 	var m runtime.MemStats
+
 	runtime.ReadMemStats(&m)
 
 	log.WithFields(logrus.Fields{

@@ -1,0 +1,5 @@
+letters: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+min_lentgh: 30
+max_lentgh: 64
+file_size_mb: 0.5
+output: path/to/output.txt
