@@ -19,7 +19,6 @@ const size = 1024
 var Version = "develop"
 
 func main() {
-	// Print our starting memory usage (should be around 0mb)
 	configPath := flag.String("c", "./cmd/generator/config-local.yaml", "path to generator config")
 	flag.Parse()
 
@@ -45,6 +44,8 @@ func main() {
 		log.WithError(err).Error("can't create or truncate file")
 	}
 
+	defer f.Close()
+
 	bytesSize := int(cfg.FileSizeMB * size * size)
 	generatedSize := 0
 	writedIter := 0
@@ -60,8 +61,6 @@ func main() {
 		generatedSize += writed
 		writedIter++
 	}
-
-	f.Close()
 
 	log.WithFields(logrus.Fields{"rows writed": writedIter, "generated size (MB)": cfg.FileSizeMB, "file": cfg.Output}).Info("ended")
 }

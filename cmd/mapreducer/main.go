@@ -63,6 +63,8 @@ func main() {
 
 			defer f.Close()
 
+			reader := csv.NewReader(f)
+
 			go func(data chan string, end chan struct{}, output chan []*model.Value, wg *sync.WaitGroup) {
 				defer wg.Done()
 
@@ -70,7 +72,7 @@ func main() {
 			}(input, end, list, wg)
 
 			for {
-				line, errR := csv.NewReader(f).Read()
+				line, errR := reader.Read()
 				if errR != nil {
 					break
 				}
