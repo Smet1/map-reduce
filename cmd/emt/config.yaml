@@ -1,0 +1,4 @@
+files_path:
+  - path/to/file1.csv
+  - path/to/file2.csv
+output: path/to/output.txt
