@@ -4,10 +4,8 @@ import (
 	"bufio"
 	"encoding/csv"
 	"flag"
-	"math/rand"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/onrik/logrus/filename"
 	"github.com/sirupsen/logrus"
@@ -53,8 +51,6 @@ func main() {
 		log.WithError(err).Error("can't create or truncate file")
 	}
 
-	rand.Seed(time.Now().Unix())
-
 	s, err := emt.New(output, chunk, less, 1024*1024*50)
 	if err != nil {
 		log.WithError(err).Fatal("can't create emt")
@@ -85,6 +81,5 @@ func chunk(r *bufio.Reader) ([]byte, error) {
 }
 
 func less(a, b []byte) bool {
-	// return bytes.Compare(a, b) < 0
 	return strings.Compare(string(a), string(b)) < 0
 }
